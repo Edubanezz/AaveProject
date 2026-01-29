@@ -1,51 +1,47 @@
-import boto3
 import os
-from datetime import datetime
+import boto3
 from botocore.exceptions import ClientError
 
-BUCKET_NAME = "mi-bucket-ejemplo-123456"
-REGION = "eu-west-1"
-LOCAL_BASE_PATH = "data"
+BUCKET_NAME = "mi-bucket-datos-aave-2026"  # CAMBIA EL NOMBRE
+BASE_PATH = "Data"
+YEARS = ["2022", "2023", "2024", "2025"]
+REGION = "eu-south-2"
 
-s3 = boto3.client("s3", region_name=REGION)
+def create_bucket():
+    s3_client = boto3.client("s3", region_name=REGION)
 
-def create_bucket(bucket_name, region):
     try:
-        s3.create_bucket(
-            Bucket=bucket_name,
-            CreateBucketConfiguration={"LocationConstraint": region}
+        s3_client.create_bucket(
+            Bucket=BUCKET_NAME,
+            CreateBucketConfiguration={"LocationConstraint": REGION}
         )
-        print(f"Bucket creado: {bucket_name}")
+        print(f"Bucket creado: {BUCKET_NAME}")
     except ClientError as e:
-        if e.response["Error"]["Code"] == "BucketAlreadyOwnedByYou":
-            print("El bucket ya existe")
+        error = e.response["Error"]["Code"]
+        if error == "BucketAlreadyOwnedByYou":
+            print("Bucket ya existe")
         else:
             raise e
 
-def upload_files(folder_type):
-    now = datetime.now()
-    year = now.year
-
-    if folder_type == "daily":
-        subfolder = f"day={now.strftime('%Y-%m-%d')}"
-    else:
-        subfolder = f"hour={now.strftime('%Y-%m-%d-%H')}"
-
-    local_path = os.path.join(LOCAL_BASE_PATH, folder_type)
-
-    for file in os.listdir(local_path):
-        local_file = os.path.join(local_path, file)
-
-        if os.path.isfile(local_file):
-            s3_key = f"year={year}/{folder_type}/{subfolder}/{file}"
-
-            s3.upload_file(local_file, BUCKET_NAME, s3_key)
-            print(f"Subido: {s3_key}")
+def upload_file(bucket, local_file, s3_key):
+    if os.path.exists(local_file):
+        bucket.upload_file(local_file, s3_key)
+        print(f"Subido: {s3_key}")
 
 def main():
-    create_bucket(BUCKET_NAME, REGION)
-    upload_files("daily")
-    upload_files("hourly")
+    create_bucket()
+
+    s3 = boto3.resource("s3", region_name=REGION)
+    bucket = s3.Bucket(BUCKET_NAME)
+
+    for year in YEARS:
+        year_path = os.path.join(BASE_PATH, f"YEAR={year}")
+
+        daily = os.path.join(year_path, "AAVEUSD_daily.csv")
+        monthly = os.path.join(year_path, "AAVEUSD_monthly.csv")
+
+        upload_file(bucket, daily, f"year={year}/daily/AAVEUSD_daily.csv")
+        upload_file(bucket, monthly, f"year={year}/monthly/AAVEUSD_monthly.csv")
 
 if __name__ == "__main__":
     main()
